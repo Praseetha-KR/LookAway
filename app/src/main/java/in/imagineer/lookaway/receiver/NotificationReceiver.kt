@@ -1,11 +1,14 @@
 package `in`.imagineer.lookaway.receiver
 
+import android.app.AlarmManager
 import java.util.Calendar
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import `in`.imagineer.lookaway.utils.PreferenceManager
 
@@ -39,6 +42,33 @@ class NotificationReceiver : BroadcastReceiver() {
                 .build()
 
             notificationManager.notify(NOTIFICATION_ID, notification)
+
+            // Schedule the next alarm
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val nextIntent = Intent(context, NotificationReceiver::class.java)
+            val nextPendingIntent = PendingIntent.getBroadcast(
+                context, 0, nextIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val intervalMillis = preferenceManager.intervalMinutes * 60 * 1000L
+            val nextTriggerTime = SystemClock.elapsedRealtime() + intervalMillis
+
+            // Only schedule next alarm if we're still within active hours
+            val futureTime = Calendar.getInstance().apply {
+                timeInMillis = System.currentTimeMillis() + intervalMillis
+            }
+            val futureHour = futureTime.get(Calendar.HOUR_OF_DAY)
+            val futureMinute = futureTime.get(Calendar.MINUTE)
+            val futureTimeMinutes = futureHour * 60 + futureMinute
+
+            if (futureTimeMinutes < endTimeMinutes) {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    nextTriggerTime,
+                    nextPendingIntent
+                )
+                preferenceManager.nextTriggerTime = nextTriggerTime
+            }
         }
     }
 
