@@ -158,9 +158,10 @@ class MainActivity : ComponentActivity() {
         val intervalMillis = intervalMinutes * 60 * 1000L
         val nextTriggerTime = getNextValidTriggerTime(intervalMillis)
 
-        alarmManager.setExactAndAllowWhileIdle(
+        alarmManager.setRepeating(
             AlarmManager.ELAPSED_REALTIME_WAKEUP,
             nextTriggerTime,
+            intervalMillis,
             pendingIntent
         )
 
