@@ -9,3 +9,7 @@
 | Reminders OFF state | Reminders ON state |
 |---|---|
 | ![](images/screenshot_reminders_off_state.png "Screenshot of Reminders OFF state") | ![](images/screenshot_reminders_on_state.png "Screenshot of Reminders ON state") |
+
+| Notification |
+|---|
+| <img src="images/screenshot_notification.png" alt="LookAway app notification" width="400" /> |
