@@ -1,6 +1,6 @@
 package `in`.imagineer.lookaway.receiver
 
-import java.util.*
+import java.util.Calendar
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.BroadcastReceiver
@@ -9,9 +9,10 @@ import android.content.Intent
 import androidx.core.app.NotificationCompat
 import `in`.imagineer.lookaway.utils.PreferenceManager
 
+
 class NotificationReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        var preferenceManager = PreferenceManager(context)
+        val preferenceManager = PreferenceManager(context)
 
         val startHour = preferenceManager.startHour
         val startMinute = preferenceManager.startMinute

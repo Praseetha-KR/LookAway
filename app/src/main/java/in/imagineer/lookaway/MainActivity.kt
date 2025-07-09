@@ -47,7 +47,7 @@ class MainActivity : ComponentActivity() {
         if (!isGranted) {
             // If permission denied, stop reminders if they were active
             if (isReminderActive) {
-                stopReminder()
+                stopReminder(preferenceManager)
                 isReminderActive = false
             }
         }
@@ -76,12 +76,12 @@ class MainActivity : ComponentActivity() {
                 val timeUntilNextReminder = savedNextTriggerTime - SystemClock.elapsedRealtime()
                 if (timeUntilNextReminder > 0) {
                     // Still time left until next reminder
-                    startCountdown(timeUntilNextReminder)
+                    startCountdown(timeUntilNextReminder, preferenceManager)
                 } else {
                     // Time has passed, calculate next occurrence
                     val intervalMillis = intervalMinutes * 60 * 1000L
                     val nextTriggerTime = getNextValidTriggerTime(intervalMillis)
-                    startCountdown(nextTriggerTime - SystemClock.elapsedRealtime())
+                    startCountdown(nextTriggerTime - SystemClock.elapsedRealtime(), preferenceManager)
                 }
             }
         }
@@ -141,15 +141,15 @@ class MainActivity : ComponentActivity() {
                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                 return
             }
-            startReminder()
+            startReminder(preferenceManager)
         } else {
-            stopReminder()
+            stopReminder(preferenceManager)
         }
         isReminderActive = !isReminderActive
         saveTimePreferences(preferenceManager)
     }
 
-    private fun startReminder() {
+    private fun startReminder(preferenceManager: PreferenceManager) {
         val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
         val intent = Intent(this, NotificationReceiver::class.java)
         val pendingIntent = PendingIntent.getBroadcast(
@@ -166,11 +166,10 @@ class MainActivity : ComponentActivity() {
         )
 
         preferenceManager.nextTriggerTime = nextTriggerTime
-
-        startCountdown(nextTriggerTime - SystemClock.elapsedRealtime())
+        startCountdown(nextTriggerTime - SystemClock.elapsedRealtime(), preferenceManager)
     }
 
-    private fun stopReminder() {
+    private fun stopReminder(preferenceManager: PreferenceManager) {
         val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
         val intent = Intent(this, NotificationReceiver::class.java)
         val pendingIntent = PendingIntent.getBroadcast(
@@ -220,7 +219,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun startCountdown(initialTimeMillis: Long) {
+    private fun startCountdown(initialTimeMillis: Long, preferenceManager: PreferenceManager) {
         countdownJob?.cancel()
         timeUntilNext = initialTimeMillis
 
