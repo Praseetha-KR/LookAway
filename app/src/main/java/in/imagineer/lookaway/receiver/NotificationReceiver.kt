@@ -12,6 +12,7 @@ import `in`.imagineer.lookaway.utils.PreferenceManager
 class NotificationReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         var preferenceManager = PreferenceManager(context)
+
         val startHour = preferenceManager.startHour
         val startMinute = preferenceManager.startMinute
         val endHour = preferenceManager.endHour
