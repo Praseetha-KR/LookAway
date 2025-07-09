@@ -1,4 +1,4 @@
-package `in`.imagineer.lookaway
+package `in`.imagineer.lookaway.receiver
 
 import java.util.*
 import android.app.NotificationChannel
@@ -6,35 +6,32 @@ import android.app.NotificationManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import androidx.core.app.NotificationCompat
+import `in`.imagineer.lookaway.utils.PreferenceManager
 
 class NotificationReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        // Check if current time is within active hours
-        val currentTime = Calendar.getInstance()
-        val currentHour = currentTime.get(Calendar.HOUR_OF_DAY)
-        val currentMinute = currentTime.get(Calendar.MINUTE)
-
-        val prefs = context.getSharedPreferences("eye_break_prefs", Context.MODE_PRIVATE)
-        val startHour = prefs.getInt("start_hour", 10)
-        val startMinute = prefs.getInt("start_minute", 0)
-        val endHour = prefs.getInt("end_hour", 22)
-        val endMinute = prefs.getInt("end_minute", 0)
+        var preferenceManager = PreferenceManager(context)
+        val startHour = preferenceManager.startHour
+        val startMinute = preferenceManager.startMinute
+        val endHour = preferenceManager.endHour
+        val endMinute = preferenceManager.endMinute
 
         val startTimeMinutes = startHour * 60 + startMinute
         val endTimeMinutes = endHour * 60 + endMinute
+        val currentTime = Calendar.getInstance()
+        val currentHour = currentTime.get(Calendar.HOUR_OF_DAY)
+        val currentMinute = currentTime.get(Calendar.MINUTE)
         val currentTimeMinutes = currentHour * 60 + currentMinute
 
         if (currentTimeMinutes in startTimeMinutes until endTimeMinutes) {
             createNotificationChannel(context)
 
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
             val notification = NotificationCompat.Builder(context, CHANNEL_ID)
                 .setContentTitle("Eye Break Reminder")
                 .setContentText("Look at object 20 feet away for 20 seconds")
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setSmallIcon(android.R.drawable.ic_media_pause)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setAutoCancel(true)
                 .build()
@@ -49,14 +46,14 @@ class NotificationReceiver : BroadcastReceiver() {
             "Eye Break Notifications",
             NotificationManager.IMPORTANCE_HIGH
         )
-        channel.description = "Notifications to remind you to look away from screen"
+        channel.description = "Notifications to remind you to look away from screens"
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.createNotificationChannel(channel)
     }
 
     companion object {
-        const val CHANNEL_ID = "eye_break_channel"
+        const val CHANNEL_ID = "look_away_eye_break_channel"
         const val NOTIFICATION_ID = 1
     }
 }
