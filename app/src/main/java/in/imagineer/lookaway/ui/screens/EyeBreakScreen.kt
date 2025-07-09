@@ -457,7 +457,7 @@ fun EyeBreakScreen(
                                 Spacer(modifier = Modifier.height(120.dp))
 
                                 Text(
-                                    text = "next reminder in",
+                                    text = "next reminder after",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )

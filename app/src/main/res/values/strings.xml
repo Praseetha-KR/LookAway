@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">LookAway</string>
+    <string name="notification_title">Eye Break Reminder</string>
+    <string name="notification_text">Look at object 20 feet away for 20 seconds</string>
+    <string name="notification_channel_name">Eye Break Notifications</string>
+    <string name="notification_channel_description">Notifications to remind you to look away from screens</string>
 </resources>

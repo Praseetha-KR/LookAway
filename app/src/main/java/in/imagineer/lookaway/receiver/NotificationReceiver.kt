@@ -3,10 +3,13 @@ package `in`.imagineer.lookaway.receiver
 import java.util.Calendar
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
+import `in`.imagineer.lookaway.MainActivity
+import `in`.imagineer.lookaway.R
 import `in`.imagineer.lookaway.utils.PreferenceManager
 
 
@@ -28,27 +31,45 @@ class NotificationReceiver : BroadcastReceiver() {
 
         if (currentTimeMinutes in startTimeMinutes until endTimeMinutes) {
             createNotificationChannel(context)
-
-            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-                .setContentTitle("Eye Break Reminder")
-                .setContentText("Look at object 20 feet away for 20 seconds")
-                .setSmallIcon(android.R.drawable.ic_media_pause)
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setAutoCancel(true)
-                .build()
-
-            notificationManager.notify(NOTIFICATION_ID, notification)
+            showNotification(context)
         }
+    }
+
+    private fun showNotification(context: Context) {
+        val launchIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            0,
+            launchIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setContentTitle(context.getString(R.string.notification_title))
+            .setContentText(context.getString(R.string.notification_text))
+            .setSmallIcon(android.R.drawable.ic_media_pause)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .setWhen(System.currentTimeMillis())
+            .build()
+
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE)
+                as NotificationManager
+        notificationManager.notify(NOTIFICATION_ID, notification)
     }
 
     private fun createNotificationChannel(context: Context) {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Eye Break Notifications",
+            context.getString(R.string.notification_channel_name),
             NotificationManager.IMPORTANCE_HIGH
         )
-        channel.description = "Notifications to remind you to look away from screens"
+        channel.description = context.getString(R.string.notification_channel_description)
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.createNotificationChannel(channel)
