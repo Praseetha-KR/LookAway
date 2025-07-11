@@ -5,6 +5,7 @@ import kotlinx.coroutines.*
 import android.Manifest
 import android.app.AlarmManager
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -71,19 +72,29 @@ class MainActivity : ComponentActivity() {
         // Resume countdown on app restart
         if (isReminderActive) {
             val savedNextTriggerTime = preferenceManager.nextTriggerTime
-
-            if (savedNextTriggerTime > 0L) {
-                val timeUntilNextReminder = savedNextTriggerTime - SystemClock.elapsedRealtime()
-                if (timeUntilNextReminder > 0) {
-                    // Still time left until next reminder
-                    startCountdown(timeUntilNextReminder, preferenceManager)
-                } else {
-                    // Time has passed, calculate next occurrence
-                    val intervalMillis = intervalMinutes * 60 * 1000L
-                    val nextTriggerTime = getNextValidTriggerTime(intervalMillis)
-                    startCountdown(nextTriggerTime - SystemClock.elapsedRealtime(), preferenceManager)
-                }
+            val currentTime = SystemClock.elapsedRealtime()
+    
+            if (savedNextTriggerTime > currentTime) {
+                // Still time left until next reminder
+                startCountdown(savedNextTriggerTime - currentTime, preferenceManager)
+            } else {
+                // Time has passed or device was rebooted, reschedule
+                stopReminder(preferenceManager)
+                startReminder(preferenceManager)
             }
+
+            // if (savedNextTriggerTime > 0L) {
+            //     val timeUntilNextReminder = savedNextTriggerTime - SystemClock.elapsedRealtime()
+            //     if (timeUntilNextReminder > 0) {
+            //         // Still time left until next reminder
+            //         startCountdown(timeUntilNextReminder, preferenceManager)
+            //     } else {
+            //         // Time has passed, calculate next occurrence
+            //         val intervalMillis = intervalMinutes * 60 * 1000L
+            //         val nextTriggerTime = getNextValidTriggerTime(intervalMillis)
+            //         startCountdown(nextTriggerTime - SystemClock.elapsedRealtime(), preferenceManager)
+            //     }
+            // }
         }
 
         setContent {
@@ -105,10 +116,20 @@ class MainActivity : ComponentActivity() {
                             endHour = eH
                             endMinute = eM
                             saveTimePreferences(preferenceManager)
+
+                            if (isReminderActive) {
+                                stopReminder(preferenceManager)
+                                startReminder(preferenceManager)
+                            }
                         },
                         onIntervalChange = { interval ->
                             intervalMinutes = interval
                             saveTimePreferences(preferenceManager)
+
+                            if (isReminderActive) {
+                                stopReminder(preferenceManager)
+                                startReminder(preferenceManager)
+                            }
                         },
                         modifier = Modifier.padding(innerPadding)
                     )
@@ -150,6 +171,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startReminder(preferenceManager: PreferenceManager) {
+        // Cancel any existing countdown first
+        countdownJob?.cancel()
+
         val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
         val intent = Intent(this, NotificationReceiver::class.java)
         val pendingIntent = PendingIntent.getBroadcast(
@@ -183,7 +207,40 @@ class MainActivity : ComponentActivity() {
         preferenceManager.remove(preferenceManager.keys.NEXT_TRIGGER_TIME)
     }
 
-    private fun getNextValidTriggerTime(intervalMillis: Long): Long {
+    fun scheduleReminderAfterBoot(context: Context, preferenceManager: PreferenceManager) {
+        val alarmManager = context.getSystemService(ALARM_SERVICE) as AlarmManager
+        val intent = Intent(context, NotificationReceiver::class.java)
+        val pendingIntent = PendingIntent.getBroadcast(
+            context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        
+        val intervalMillis = preferenceManager.intervalMinutes * 60 * 1000L
+        val nextTriggerTime = calculateNextTriggerTime(
+            preferenceManager.startHour,
+            preferenceManager.startMinute,
+            preferenceManager.endHour,
+            preferenceManager.endMinute,
+            intervalMillis
+        )
+        
+        alarmManager.setRepeating(
+            AlarmManager.ELAPSED_REALTIME_WAKEUP,
+            nextTriggerTime,
+            intervalMillis,
+            pendingIntent
+        )
+        
+        preferenceManager.nextTriggerTime = nextTriggerTime
+    }
+
+    // Extract the trigger time calculation to a separate function
+    private fun calculateNextTriggerTime(
+        startHour: Int,
+        startMinute: Int,
+        endHour: Int,
+        endMinute: Int,
+        intervalMillis: Long
+    ): Long {
         val currentTime = Calendar.getInstance()
         val currentHour = currentTime.get(Calendar.HOUR_OF_DAY)
         val currentMinute = currentTime.get(Calendar.MINUTE)
@@ -193,20 +250,16 @@ class MainActivity : ComponentActivity() {
         val currentTimeMinutes = currentHour * 60 + currentMinute
 
         return if (currentTimeMinutes in startTimeMinutes until endTimeMinutes) {
-            // We're in active hours, next trigger is in the specified interval
             SystemClock.elapsedRealtime() + intervalMillis
         } else if (currentTimeMinutes < startTimeMinutes) {
-            // Before start time today - trigger at start time
             val nextStartTime = Calendar.getInstance().apply {
                 set(Calendar.HOUR_OF_DAY, startHour)
                 set(Calendar.MINUTE, startMinute)
                 set(Calendar.SECOND, 0)
                 set(Calendar.MILLISECOND, 0)
             }
-            val timeDifference = nextStartTime.timeInMillis - System.currentTimeMillis()
-            SystemClock.elapsedRealtime() + timeDifference
+            SystemClock.elapsedRealtime() + (nextStartTime.timeInMillis - System.currentTimeMillis())
         } else {
-            // After end time today - trigger at start time tomorrow
             val nextStartTime = Calendar.getInstance().apply {
                 set(Calendar.HOUR_OF_DAY, startHour)
                 set(Calendar.MINUTE, startMinute)
@@ -214,9 +267,52 @@ class MainActivity : ComponentActivity() {
                 set(Calendar.MILLISECOND, 0)
                 add(Calendar.DAY_OF_YEAR, 1)
             }
-            val timeDifference = nextStartTime.timeInMillis - System.currentTimeMillis()
-            SystemClock.elapsedRealtime() + timeDifference
+            SystemClock.elapsedRealtime() + (nextStartTime.timeInMillis - System.currentTimeMillis())
         }
+    }
+
+    private fun getNextValidTriggerTime(intervalMillis: Long): Long {
+        return calculateNextTriggerTime(
+            startHour,
+            startMinute,
+            endHour,
+            endMinute,
+            intervalMillis
+        )
+
+        // val currentTime = Calendar.getInstance()
+        // val currentHour = currentTime.get(Calendar.HOUR_OF_DAY)
+        // val currentMinute = currentTime.get(Calendar.MINUTE)
+
+        // val startTimeMinutes = startHour * 60 + startMinute
+        // val endTimeMinutes = endHour * 60 + endMinute
+        // val currentTimeMinutes = currentHour * 60 + currentMinute
+
+        // return if (currentTimeMinutes in startTimeMinutes until endTimeMinutes) {
+        //     // We're in active hours, next trigger is in the specified interval
+        //     SystemClock.elapsedRealtime() + intervalMillis
+        // } else if (currentTimeMinutes < startTimeMinutes) {
+        //     // Before start time today - trigger at start time
+        //     val nextStartTime = Calendar.getInstance().apply {
+        //         set(Calendar.HOUR_OF_DAY, startHour)
+        //         set(Calendar.MINUTE, startMinute)
+        //         set(Calendar.SECOND, 0)
+        //         set(Calendar.MILLISECOND, 0)
+        //     }
+        //     val timeDifference = nextStartTime.timeInMillis - System.currentTimeMillis()
+        //     SystemClock.elapsedRealtime() + timeDifference
+        // } else {
+        //     // After end time today - trigger at start time tomorrow
+        //     val nextStartTime = Calendar.getInstance().apply {
+        //         set(Calendar.HOUR_OF_DAY, startHour)
+        //         set(Calendar.MINUTE, startMinute)
+        //         set(Calendar.SECOND, 0)
+        //         set(Calendar.MILLISECOND, 0)
+        //         add(Calendar.DAY_OF_YEAR, 1)
+        //     }
+        //     val timeDifference = nextStartTime.timeInMillis - System.currentTimeMillis()
+        //     SystemClock.elapsedRealtime() + timeDifference
+        // }
     }
 
     private fun startCountdown(initialTimeMillis: Long, preferenceManager: PreferenceManager) {
