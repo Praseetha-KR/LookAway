@@ -1,12 +1,14 @@
 package `in`.imagineer.lookaway.receiver
 
 import java.util.Calendar
+import android.app.AlarmManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import `in`.imagineer.lookaway.MainActivity
 import `in`.imagineer.lookaway.R
@@ -32,6 +34,29 @@ class NotificationReceiver : BroadcastReceiver() {
         if (currentTimeMinutes in startTimeMinutes until endTimeMinutes) {
             createNotificationChannel(context)
             showNotification(context)
+        }
+
+        // Schedule next alarm
+        if (intent.getBooleanExtra("RESCHEDULE", false) && preferenceManager.isReminderActive) {
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val newIntent = Intent(context, NotificationReceiver::class.java).apply {
+                putExtra("RESCHEDULE", true)
+            }
+            val pendingIntent = PendingIntent.getBroadcast(
+                context, 0, newIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val interval = preferenceManager.intervalMinutes * 60 * 1000L
+            val nextTrigger = SystemClock.elapsedRealtime() + interval
+
+            alarmManager.setExactAndAllowWhileIdle(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                nextTrigger,
+                pendingIntent
+            )
+
+            preferenceManager.nextTriggerTime = nextTrigger
         }
     }
 
