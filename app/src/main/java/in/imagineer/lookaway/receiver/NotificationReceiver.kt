@@ -8,55 +8,52 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import `in`.imagineer.lookaway.MainActivity
 import `in`.imagineer.lookaway.R
+import `in`.imagineer.lookaway.utils.AlarmUtils
 import `in`.imagineer.lookaway.utils.PreferenceManager
 
 
 class NotificationReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val preferenceManager = PreferenceManager(context)
+        if (preferenceManager.isReminderActive) {
+            val startHour = preferenceManager.startHour
+            val startMinute = preferenceManager.startMinute
+            val endHour = preferenceManager.endHour
+            val endMinute = preferenceManager.endMinute
+            val startTimeMinutes = startHour * 60 + startMinute
+            val endTimeMinutes = endHour * 60 + endMinute
+            val currentTime = Calendar.getInstance()
 
-        val startHour = preferenceManager.startHour
-        val startMinute = preferenceManager.startMinute
-        val endHour = preferenceManager.endHour
-        val endMinute = preferenceManager.endMinute
+            val currentHour = currentTime.get(Calendar.HOUR_OF_DAY)
+            val currentMinute = currentTime.get(Calendar.MINUTE)
+            val currentTimeMinutes = currentHour * 60 + currentMinute
 
-        val startTimeMinutes = startHour * 60 + startMinute
-        val endTimeMinutes = endHour * 60 + endMinute
-        val currentTime = Calendar.getInstance()
-        val currentHour = currentTime.get(Calendar.HOUR_OF_DAY)
-        val currentMinute = currentTime.get(Calendar.MINUTE)
-        val currentTimeMinutes = currentHour * 60 + currentMinute
-
-        if (currentTimeMinutes in startTimeMinutes until endTimeMinutes) {
-            createNotificationChannel(context)
-            showNotification(context)
-        }
-
-        // Schedule next alarm
-        if (intent.getBooleanExtra("RESCHEDULE", false) && preferenceManager.isReminderActive) {
-            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            val newIntent = Intent(context, NotificationReceiver::class.java).apply {
-                putExtra("RESCHEDULE", true)
+            // Notify if within active hours
+            if (currentTimeMinutes in startTimeMinutes until endTimeMinutes) {
+                createNotificationChannel(context)
+                showNotification(context)
             }
+
+            // Schedule next alarm
+            val nextTriggerTime = AlarmUtils.getNextValidTriggerTime(
+                preferenceManager,
+                preferenceManager.intervalMinutes * 60 * 1000L
+            )
+            preferenceManager.nextTriggerTime = nextTriggerTime
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val newIntent = Intent(context, NotificationReceiver::class.java)
             val pendingIntent = PendingIntent.getBroadcast(
                 context, 0, newIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-
-            val interval = preferenceManager.intervalMinutes * 60 * 1000L
-            val nextTrigger = SystemClock.elapsedRealtime() + interval
-
             alarmManager.setExactAndAllowWhileIdle(
                 AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                nextTrigger,
+                nextTriggerTime,
                 pendingIntent
             )
-
-            preferenceManager.nextTriggerTime = nextTrigger
         }
     }
 

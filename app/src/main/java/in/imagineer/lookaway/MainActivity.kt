@@ -67,17 +67,19 @@ class MainActivity : ComponentActivity() {
             val savedNextTriggerTime = preferenceManager.nextTriggerTime
             val currentTime = SystemClock.elapsedRealtime()
     
-            if (savedNextTriggerTime > currentTime) {
-                // Still time left until next reminder
-                startCountdown(savedNextTriggerTime - currentTime, preferenceManager)
-            } else {
-                // Time has passed or device was rebooted, reschedule
+            if (currentTime > savedNextTriggerTime) {
+                // Time has passed or device was rebooted, restart
                 AlarmUtils.stopReminder(this, preferenceManager)
                 AlarmUtils.startReminder(this, preferenceManager)
-
-                val newNextTriggerTime = preferenceManager.nextTriggerTime
-                startCountdown(newNextTriggerTime - currentTime, preferenceManager)
             }
+
+            countdownJob?.cancel()
+            countdownJob = AlarmUtils.startCountdown(
+                preferenceManager,
+                onTick = { timeUntilNext ->
+                    this.timeUntilNext = timeUntilNext
+                },
+            )
         }
 
         setContent {
@@ -158,31 +160,17 @@ class MainActivity : ComponentActivity() {
     private fun startReminder(preferenceManager: PreferenceManager) {
         countdownJob?.cancel()
         AlarmUtils.startReminder(this, preferenceManager)
-        val nextTriggerTime = preferenceManager.nextTriggerTime
-        startCountdown(nextTriggerTime - SystemClock.elapsedRealtime(), preferenceManager)
+        countdownJob = AlarmUtils.startCountdown(
+            preferenceManager,
+            onTick = { remaining ->
+                timeUntilNext = remaining
+            }
+        )
     }
 
     private fun stopReminder(preferenceManager: PreferenceManager) {
         AlarmUtils.stopReminder(this, preferenceManager)
         countdownJob?.cancel()
         timeUntilNext = 0L
-    }
-
-    private fun startCountdown(initialTimeMillis: Long, preferenceManager: PreferenceManager) {
-        countdownJob?.cancel()
-        timeUntilNext = initialTimeMillis
-
-        countdownJob = CoroutineScope(Dispatchers.Main).launch {
-            while (isActive) {
-                delay(1000)
-                timeUntilNext -= 1000
-
-                if (timeUntilNext <= 0) {
-                    AlarmUtils.startReminder(this@MainActivity, preferenceManager)
-                    val nextTriggerTime = preferenceManager.nextTriggerTime
-                    timeUntilNext = nextTriggerTime - SystemClock.elapsedRealtime()
-                }
-            }
-        }
     }
 }

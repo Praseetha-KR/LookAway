@@ -1,5 +1,6 @@
 package `in`.imagineer.lookaway.utils
 
+import kotlinx.coroutines.*
 import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
@@ -10,17 +11,14 @@ import `in`.imagineer.lookaway.receiver.NotificationReceiver
 
 object AlarmUtils {
     fun startReminder(context: Context, preferenceManager: PreferenceManager) {
+        val intervalMillis = preferenceManager.intervalMinutes * 60 * 1000L
+        val nextTriggerTime = getNextValidTriggerTime(preferenceManager, intervalMillis)
+
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val intent = Intent(context, NotificationReceiver::class.java).apply {
-            putExtra("RESCHEDULE", true)
-        }
+        val intent = Intent(context, NotificationReceiver::class.java)
         val pendingIntent = PendingIntent.getBroadcast(
             context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-
-        val intervalMillis = preferenceManager.intervalMinutes * 60 * 1000L
-        val nextTriggerTime = getNextValidTriggerTime(context, preferenceManager, intervalMillis)
-
         alarmManager.setExactAndAllowWhileIdle(
             AlarmManager.ELAPSED_REALTIME_WAKEUP,
             nextTriggerTime,
@@ -36,13 +34,12 @@ object AlarmUtils {
         val pendingIntent = PendingIntent.getBroadcast(
             context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-
         alarmManager.cancel(pendingIntent)
+
         preferenceManager.remove(preferenceManager.keys.NEXT_TRIGGER_TIME)
     }
 
-    private fun getNextValidTriggerTime(
-        context: Context,
+    fun getNextValidTriggerTime(
         preferenceManager: PreferenceManager,
         intervalMillis: Long
     ): Long {
@@ -50,7 +47,6 @@ object AlarmUtils {
         val startMinute = preferenceManager.startMinute
         val endHour = preferenceManager.endHour
         val endMinute = preferenceManager.endMinute
-
         val currentTime = Calendar.getInstance()
         val currentHour = currentTime.get(Calendar.HOUR_OF_DAY)
         val currentMinute = currentTime.get(Calendar.MINUTE)
@@ -78,6 +74,31 @@ object AlarmUtils {
                 add(Calendar.DAY_OF_YEAR, 1)
             }
             SystemClock.elapsedRealtime() + (nextStartTime.timeInMillis - System.currentTimeMillis())
+        }
+    }
+
+    fun startCountdown(
+        preferenceManager: PreferenceManager,
+        onTick: (Long) -> Unit,
+    ): Job {
+        var remainingTime = preferenceManager.nextTriggerTime - SystemClock.elapsedRealtime()
+
+        return CoroutineScope(Dispatchers.Main).launch {
+            while (isActive) {
+                delay(1000)
+                remainingTime -= 1000
+
+                if (remainingTime <= 0) {
+                    val newTriggerTime = getNextValidTriggerTime(
+                        preferenceManager,
+                        preferenceManager.intervalMinutes * 60 * 1000L
+                    )
+                    preferenceManager.nextTriggerTime = newTriggerTime
+                    remainingTime = newTriggerTime - SystemClock.elapsedRealtime()
+                }
+
+                onTick(remainingTime)
+            }
         }
     }
 }
